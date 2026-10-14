@@ -136,10 +136,14 @@ class GameEngine {
         }
     }
 
+    /**
+     * Resolves matching tiles to remove, including special beam and nova explosions.
+     */
     fun calculateExplodedIndices(selectedIndices: List<Int>, board: List<Tile>): Set<Int> {
         val result = mutableSetOf<Int>()
         result.addAll(selectedIndices)
 
+        // Process special tiles in the chain
         selectedIndices.forEach { idx ->
             val tile = board.getOrNull(idx) ?: return@forEach
             when (tile.special) {
@@ -178,6 +182,9 @@ class GameEngine {
         return result
     }
 
+    /**
+     * Collapses board downwards with gravity and refills new random tiles from the top.
+     */
     fun collapseAndRefill(
         currentBoard: List<Tile>,
         explodedIndices: Set<Int>,
@@ -188,6 +195,8 @@ class GameEngine {
             working[idx] = null
         }
 
+        // If chain was 4 or 5+, spawn a special tile at the last linked position
+        // This is handled by caller before or after refill
         val nextBoard: MutableList<Tile?> = MutableList(TOTAL_TILES) { null }
         val refilled = mutableListOf<Int>()
         val colorBag = mutableListOf<LumenColor>()
@@ -233,6 +242,9 @@ class GameEngine {
         return Pair(finalBoard, refilled)
     }
 
+    /**
+     * Executes Shuffle Booster.
+     */
     fun shuffleBoard(board: MutableList<Tile>): MutableList<Tile> {
         val colors = board.map { it.color }.shuffled()
         for (i in board.indices) {
@@ -246,10 +258,12 @@ class GameEngine {
         return board
     }
 
-    fun executeBombBooster(board: List<Tile>): Pair<MutableList<Tile>, Int> {
-        val center = (BOARD_SIZE / 2) * BOARD_SIZE + (BOARD_SIZE / 2)
-        val centerRow = rowOf(center)
-        val centerCol = colOf(center)
+    /**
+     * Executes Bomb Booster: clears 3x3 at target cell.
+     */
+    fun executeBombBooster(board: List<Tile>, centerIndex: Int = (BOARD_SIZE / 2) * BOARD_SIZE + (BOARD_SIZE / 2)): Pair<MutableList<Tile>, Int> {
+        val centerRow = rowOf(centerIndex)
+        val centerCol = colOf(centerIndex)
         val cleared = mutableSetOf<Int>()
         for (dr in -1..1) {
             for (dc in -1..1) {
@@ -264,10 +278,21 @@ class GameEngine {
         return Pair(newBoard, cleared.size * 50)
     }
 
-    fun executeBurstBooster(board: List<Tile>): Pair<MutableList<Tile>, Int> {
-        val colorCounts = board.groupingBy { it.color }.eachCount()
-        val targetColor = colorCounts.maxByOrNull { it.value }?.key ?: LumenColor.SOLAR
-        val cleared = board.indices.filter { board[it].color == targetColor }.toSet()
+    /**
+     * Executes Burst Wave Booster: clears all tiles within Euclidean radius <= 2.
+     */
+    fun executeBurstBooster(board: List<Tile>, centerIndex: Int = (BOARD_SIZE / 2) * BOARD_SIZE + (BOARD_SIZE / 2)): Pair<MutableList<Tile>, Int> {
+        val centerRow = rowOf(centerIndex)
+        val centerCol = colOf(centerIndex)
+        val cleared = mutableSetOf<Int>()
+        for (r in 0 until BOARD_SIZE) {
+            for (c in 0 until BOARD_SIZE) {
+                val dist = kotlin.math.hypot((r - centerRow).toDouble(), (c - centerCol).toDouble())
+                if (dist <= 2.0) {
+                    cleared.add(r * BOARD_SIZE + c)
+                }
+            }
+        }
         val (newBoard, _) = collapseAndRefill(board, cleared)
         return Pair(newBoard, cleared.size * 60)
     }

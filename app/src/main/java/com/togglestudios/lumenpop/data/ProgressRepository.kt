@@ -15,6 +15,8 @@ class ProgressRepository(context: Context) {
         val haptics = prefs.getBoolean("haptics", true)
         val highContrast = prefs.getBoolean("highContrast", false)
         val username = prefs.getString("username", "Player") ?: "Player"
+        val tutorialSeen = prefs.getBoolean("tutorialSeen", false)
+        val dailyGiftClaimedOn = prefs.getString("dailyGiftClaimedOn", "") ?: ""
 
         val completedMap = mutableMapOf<Int, LevelStats>()
         for (i in 1..100) {
@@ -33,7 +35,9 @@ class ProgressRepository(context: Context) {
             music = music,
             haptics = haptics,
             highContrast = highContrast,
-            username = username
+            username = username,
+            tutorialSeen = tutorialSeen,
+            dailyGiftClaimedOn = dailyGiftClaimedOn
         )
     }
 
@@ -46,6 +50,8 @@ class ProgressRepository(context: Context) {
         editor.putBoolean("haptics", progress.haptics)
         editor.putBoolean("highContrast", progress.highContrast)
         editor.putString("username", progress.username)
+        editor.putBoolean("tutorialSeen", progress.tutorialSeen)
+        editor.putString("dailyGiftClaimedOn", progress.dailyGiftClaimedOn)
 
         progress.completed.forEach { (level, stats) ->
             editor.putInt("level_${level}_stars", stats.stars)

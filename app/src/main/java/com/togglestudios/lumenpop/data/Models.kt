@@ -67,7 +67,9 @@ data class SavedProgress(
     var music: Boolean = true,
     var haptics: Boolean = true,
     var highContrast: Boolean = false,
-    var username: String = "Player"
+    var username: String = "Player",
+    var tutorialSeen: Boolean = false,
+    var dailyGiftClaimedOn: String = ""
 )
 
 data class LevelConfig(
