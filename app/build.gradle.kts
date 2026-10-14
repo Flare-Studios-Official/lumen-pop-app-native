@@ -40,10 +40,7 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.6.8")
     implementation("androidx.compose.ui:ui-tooling-preview:1.6.8")
     implementation("androidx.compose.material3:material3:1.2.1")
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-database-ktx")
+    // Supabase native backend active (Firebase retired)
     // Haptic feedback
     implementation("androidx.compose.foundation:foundation:1.6.8")
     // SoundPool for SFX (no extra dependency)

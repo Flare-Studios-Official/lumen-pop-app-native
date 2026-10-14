@@ -1,6 +1,7 @@
 package com.togglestudios.lumenpop.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,8 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -38,6 +43,7 @@ fun SettingsScreen(
     progress: SavedProgress,
     onSaveProgress: (SavedProgress) -> Unit,
     onResetProgress: () -> Unit,
+    onSignOut: () -> Unit,
     onBack: () -> Unit
 ) {
     var music by remember { mutableStateOf(progress.music) }
@@ -55,7 +61,12 @@ fun SettingsScreen(
             )
             .padding(20.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -83,13 +94,61 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // Account Card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xFF1B0B3B).copy(alpha = 0.9f))
+                    .border(1.dp, Color(0xFF00F0FF).copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "STARGAZER ACCOUNT",
+                        color = Color(0xFF00F0FF),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "@${progress.username}",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "☁ Cloud synchronization active",
+                        color = Color(0xFF00FF7F),
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(
+                        onClick = onSignOut,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f))
+                    ) {
+                        Text(text = "Sign Out", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Settings Items Card
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF1B0B3B).copy(alpha = 0.9f))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp))
                     .padding(16.dp)
             ) {
                 SettingToggleRow(
@@ -133,8 +192,9 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
+            // Reset Progress button
             OutlinedButton(
                 onClick = onResetProgress,
                 modifier = Modifier.fillMaxWidth(),
@@ -146,6 +206,8 @@ fun SettingsScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

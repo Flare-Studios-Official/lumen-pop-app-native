@@ -5,10 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
@@ -17,12 +19,14 @@ import com.togglestudios.lumenpop.data.Screen
 import com.togglestudios.lumenpop.engine.SoundManager
 import com.togglestudios.lumenpop.engine.VibrationManager
 import com.togglestudios.lumenpop.ui.components.TutorialCarousel
+import com.togglestudios.lumenpop.ui.screens.AuthScreen
 import com.togglestudios.lumenpop.ui.screens.GameScreen
 import com.togglestudios.lumenpop.ui.screens.HomeScreen
 import com.togglestudios.lumenpop.ui.screens.LoadingScreen
 import com.togglestudios.lumenpop.ui.screens.SettingsScreen
 import com.togglestudios.lumenpop.ui.screens.StartScreen
 import com.togglestudios.lumenpop.ui.theme.LumenPopTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -44,7 +48,9 @@ class MainActivity : ComponentActivity() {
             var activeLevel by remember { mutableIntStateOf(currentProgress.highestUnlocked) }
             var showTutorial by remember { mutableStateOf(false) }
 
-            // Sync settings
+            val scope = rememberCoroutineScope()
+
+            // Sync audio & haptics settings
             soundManager.isMusicEnabled = currentProgress.music
             soundManager.isSoundEnabled = currentProgress.sound
             vibrationManager.isHapticsEnabled = currentProgress.haptics
@@ -55,8 +61,33 @@ class MainActivity : ComponentActivity() {
                         Screen.LOADING -> {
                             LoadingScreen(
                                 onLoaded = {
-                                    currentScreen = Screen.START
-                                    soundManager.playMusic("homepage_music.mp3")
+                                    if (progressRepository.supabaseManager.isLoggedIn()) {
+                                        scope.launch {
+                                            val synced = progressRepository.syncWithCloud()
+                                            currentProgress = synced
+                                            activeLevel = synced.highestUnlocked
+                                        }
+                                        currentScreen = Screen.HOME
+                                        soundManager.playMusic("homepage_music.mp3")
+                                    } else {
+                                        currentScreen = Screen.USERNAME
+                                    }
+                                }
+                            )
+                        }
+
+                        Screen.USERNAME -> {
+                            AuthScreen(
+                                supabaseManager = progressRepository.supabaseManager,
+                                onAuthSuccess = { username ->
+                                    scope.launch {
+                                        val synced = progressRepository.syncWithCloud()
+                                        currentProgress = synced.copy(username = username)
+                                        activeLevel = synced.highestUnlocked
+                                        progressRepository.saveProgress(currentProgress)
+                                        currentScreen = Screen.HOME
+                                        soundManager.playMusic("homepage_music.mp3")
+                                    }
                                 }
                             )
                         }
@@ -89,7 +120,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onSaveProgress = { updated ->
                                     currentProgress = updated
-                                    progressRepository.saveProgress(updated)
+                                    progressRepository.saveProgress(updated, syncToCloud = true)
                                 },
                                 onBack = {
                                     currentScreen = Screen.START
@@ -105,7 +136,7 @@ class MainActivity : ComponentActivity() {
                                 vibrationManager = vibrationManager,
                                 onSaveProgress = { updated ->
                                     currentProgress = updated
-                                    progressRepository.saveProgress(updated)
+                                    progressRepository.saveProgress(updated, syncToCloud = true)
                                 },
                                 onNextLevel = { nextLvl ->
                                     activeLevel = nextLvl
@@ -122,7 +153,7 @@ class MainActivity : ComponentActivity() {
                                 progress = currentProgress,
                                 onSaveProgress = { updated ->
                                     currentProgress = updated
-                                    progressRepository.saveProgress(updated)
+                                    progressRepository.saveProgress(updated, syncToCloud = true)
                                     soundManager.isMusicEnabled = updated.music
                                     soundManager.isSoundEnabled = updated.sound
                                     vibrationManager.isHapticsEnabled = updated.haptics
@@ -132,8 +163,13 @@ class MainActivity : ComponentActivity() {
                                     currentProgress = reset
                                     activeLevel = 1
                                 },
+                                onSignOut = {
+                                    progressRepository.supabaseManager.signOut()
+                                    currentScreen = Screen.USERNAME
+                                    soundManager.stopMusic()
+                                },
                                 onBack = {
-                                    currentScreen = Screen.START
+                                    currentScreen = Screen.HOME
                                 }
                             )
                         }
@@ -148,7 +184,7 @@ class MainActivity : ComponentActivity() {
                             onComplete = {
                                 showTutorial = false
                                 currentProgress.tutorialSeen = true
-                                progressRepository.saveProgress(currentProgress)
+                                progressRepository.saveProgress(currentProgress, syncToCloud = true)
                                 currentScreen = Screen.GAME
                             }
                         )
