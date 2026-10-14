@@ -1,18 +1,22 @@
-package com.togglestudios.lumenpop.MainActivity
+package com.togglestudios.lumenpop
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import com.togglestudios.lumenpop.data.ProgressRepository
 import com.togglestudios.lumenpop.data.Screen
 import com.togglestudios.lumenpop.engine.SoundManager
 import com.togglestudios.lumenpop.engine.VibrationManager
+import com.togglestudios.lumenpop.ui.components.TutorialCarousel
 import com.togglestudios.lumenpop.ui.screens.GameScreen
 import com.togglestudios.lumenpop.ui.screens.HomeScreen
 import com.togglestudios.lumenpop.ui.screens.LoadingScreen
@@ -38,6 +42,7 @@ class MainActivity : ComponentActivity() {
             var currentScreen by remember { mutableStateOf(Screen.LOADING) }
             var currentProgress by remember { mutableStateOf(progressRepository.loadProgress()) }
             var activeLevel by remember { mutableIntStateOf(currentProgress.highestUnlocked) }
+            var showTutorial by remember { mutableStateOf(false) }
 
             // Sync settings
             soundManager.isMusicEnabled = currentProgress.music
@@ -45,84 +50,108 @@ class MainActivity : ComponentActivity() {
             vibrationManager.isHapticsEnabled = currentProgress.haptics
 
             LumenPopTheme {
-                when (currentScreen) {
-                    Screen.LOADING -> {
-                        LoadingScreen(
-                            onLoaded = {
-                                currentScreen = Screen.START
-                                soundManager.playMusic("homepage_music.mp3")
-                            }
-                        )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when (currentScreen) {
+                        Screen.LOADING -> {
+                            LoadingScreen(
+                                onLoaded = {
+                                    currentScreen = Screen.START
+                                    soundManager.playMusic("homepage_music.mp3")
+                                }
+                            )
+                        }
+
+                        Screen.START -> {
+                            StartScreen(
+                                progress = currentProgress,
+                                onPlayClick = {
+                                    currentScreen = Screen.HOME
+                                },
+                                onSettingsClick = {
+                                    currentScreen = Screen.SETTINGS
+                                }
+                            )
+                        }
+
+                        Screen.HOME -> {
+                            HomeScreen(
+                                progress = currentProgress,
+                                onSelectLevel = { lvl ->
+                                    activeLevel = lvl
+                                    if (lvl == 1 && !currentProgress.tutorialSeen) {
+                                        showTutorial = true
+                                    } else {
+                                        currentScreen = Screen.GAME
+                                    }
+                                },
+                                onSettings = {
+                                    currentScreen = Screen.SETTINGS
+                                },
+                                onSaveProgress = { updated ->
+                                    currentProgress = updated
+                                    progressRepository.saveProgress(updated)
+                                },
+                                onBack = {
+                                    currentScreen = Screen.START
+                                }
+                            )
+                        }
+
+                        Screen.GAME -> {
+                            GameScreen(
+                                level = activeLevel,
+                                progress = currentProgress,
+                                soundManager = soundManager,
+                                vibrationManager = vibrationManager,
+                                onSaveProgress = { updated ->
+                                    currentProgress = updated
+                                    progressRepository.saveProgress(updated)
+                                },
+                                onNextLevel = { nextLvl ->
+                                    activeLevel = nextLvl
+                                },
+                                onHome = {
+                                    currentScreen = Screen.HOME
+                                    soundManager.playMusic("homepage_music.mp3")
+                                }
+                            )
+                        }
+
+                        Screen.SETTINGS -> {
+                            SettingsScreen(
+                                progress = currentProgress,
+                                onSaveProgress = { updated ->
+                                    currentProgress = updated
+                                    progressRepository.saveProgress(updated)
+                                    soundManager.isMusicEnabled = updated.music
+                                    soundManager.isSoundEnabled = updated.sound
+                                    vibrationManager.isHapticsEnabled = updated.haptics
+                                },
+                                onResetProgress = {
+                                    val reset = progressRepository.resetProgress()
+                                    currentProgress = reset
+                                    activeLevel = 1
+                                },
+                                onBack = {
+                                    currentScreen = Screen.START
+                                }
+                            )
+                        }
+
+                        else -> {
+                            currentScreen = Screen.START
+                        }
                     }
 
-                    Screen.START -> {
-                        StartScreen(
-                            progress = currentProgress,
-                            onPlayClick = {
-                                currentScreen = Screen.HOME
-                            },
-                            onSettingsClick = {
-                                currentScreen = Screen.SETTINGS
-                            }
-                        )
-                    }
-
-                    Screen.HOME -> {
-                        HomeScreen(
-                            progress = currentProgress,
-                            onSelectLevel = { lvl ->
-                                activeLevel = lvl
+                    if (showTutorial) {
+                        TutorialCarousel(
+                            onComplete = {
+                                showTutorial = false
+                                currentProgress.tutorialSeen = true
+                                progressRepository.saveProgress(currentProgress)
                                 currentScreen = Screen.GAME
-                            },
-                            onBack = {
-                                currentScreen = Screen.START
                             }
                         )
-                    }
-
-                    Screen.GAME -> {
-                        GameScreen(
-                            level = activeLevel,
-                            progress = currentProgress,
-                            soundManager = soundManager,
-                            vibrationManager = vibrationManager,
-                            onSaveProgress = { updated ->
-                                currentProgress = updated
-                                progressRepository.saveProgress(updated)
-                            },
-                            onNextLevel = { nextLvl ->
-                                activeLevel = nextLvl
-                            },
-                            onHome = {
-                                currentScreen = Screen.HOME
-                                soundManager.playMusic("homepage_music.mp3")
-                            }
-                        )
-                    }
-
-                    Screen.SETTINGS -> {
-                        SettingsScreen(
-                            progress = currentProgress,
-                            onSaveProgress = { updated ->
-                                currentProgress = updated
-                                progressRepository.saveProgress(updated)
-                                soundManager.isMusicEnabled = updated.music
-                                soundManager.isSoundEnabled = updated.sound
-                                vibrationManager.isHapticsEnabled = updated.haptics
-                            },
-                            onResetProgress = {
-                                val reset = progressRepository.resetProgress()
-                                currentProgress = reset
-                                activeLevel = 1
-                            },
-                            onBack = {
-                                currentScreen = Screen.START
-                            }
-                        )
-                    }
-
-                    else -> {
-                        currentScreen = Screen.START
                     }
                 }
             }
