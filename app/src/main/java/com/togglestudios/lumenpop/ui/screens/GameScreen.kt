@@ -109,26 +109,37 @@ fun GameScreen(
     val levelConfig = remember(level) { LevelConfig.forLevel(level) }
     val engine = remember { GameEngine() }
 
+    var score by remember(level) { mutableIntStateOf(0) }
+    var movesLeft by remember(level) { mutableIntStateOf(levelConfig.moves) }
+    val board = remember(level) { mutableStateListOf<Tile>().apply { addAll(engine.createBoard(level)) } }
+    val selectedIndices = remember(level) { mutableStateListOf<Int>() }
+    var activeColor by remember(level) { mutableStateOf<LumenColor?>(null) }
+    var lockedDirection by remember(level) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var isDragging by remember(level) { mutableStateOf(false) }
+
+    var activeBooster by remember(level) { mutableStateOf<BoosterKind?>(null) }
+    var toastMessage by remember(level) { mutableStateOf<String?>(null) }
+    var activeOverlay by remember(level) { mutableStateOf<OverlayType?>(null) }
+    var isBusy by remember(level) { mutableStateOf(false) }
+
+    val bgBitmap = rememberAssetImage(levelConfig.bgAsset)
+
     LaunchedEffect(level) {
+        score = 0
+        movesLeft = LevelConfig.forLevel(level).moves
+        board.clear()
+        board.addAll(engine.createBoard(level))
+        selectedIndices.clear()
+        activeOverlay = null
+        isBusy = false
+        activeBooster = null
+        activeColor = null
+        lockedDirection = null
+        isDragging = false
         if (progress.music) {
             soundManager.playMusic("gameplay_music.mp3")
         }
     }
-
-    var score by remember { mutableIntStateOf(0) }
-    var movesLeft by remember { mutableIntStateOf(levelConfig.moves) }
-    val board = remember { mutableStateListOf<Tile>().apply { addAll(engine.createBoard(level)) } }
-    val selectedIndices = remember { mutableStateListOf<Int>() }
-    var activeColor by remember { mutableStateOf<LumenColor?>(null) }
-    var lockedDirection by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var isDragging by remember { mutableStateOf(false) }
-
-    var activeBooster by remember { mutableStateOf<BoosterKind?>(null) }
-    var toastMessage by remember { mutableStateOf<String?>(null) }
-    var activeOverlay by remember { mutableStateOf<OverlayType?>(null) }
-    var isBusy by remember { mutableStateOf(false) }
-
-    val bgBitmap = rememberAssetImage(levelConfig.bgAsset)
 
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
@@ -722,10 +733,6 @@ fun GameScreen(
 
                     // Floating Chain Count Badge (e.g. "4 LINK" / "5 CHARGE")
                     if (isDragging && selectedIndices.size > 1) {
-                        val lastIdx = selectedIndices.last()
-                        val lastCol = GameEngine.colOf(lastIdx)
-                        val lastRow = GameEngine.rowOf(lastIdx)
-
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)

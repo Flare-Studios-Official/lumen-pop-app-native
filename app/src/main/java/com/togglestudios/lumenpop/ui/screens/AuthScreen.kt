@@ -521,6 +521,23 @@ fun AuthOverlayModal(
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Link Afterwards (as requested in Phase 6 specification)
+                        Text(
+                            text = "Link Afterwards · Play as Stargazer",
+                            color = Color(0xFF00F0FF).copy(alpha = 0.85f),
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onClose()
+                                }
+                                .padding(vertical = 4.dp)
+                        )
                     } else {
                         // Email Form (Sign In / Sign Up)
                         Column(modifier = Modifier.fillMaxWidth()) {

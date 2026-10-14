@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,8 +73,7 @@ class MainActivity : ComponentActivity() {
                                         currentScreen = Screen.START
                                         soundManager.playMusic("homepage_music.mp3")
                                     } else {
-                                        currentScreen = Screen.START
-                                        soundManager.playMusic("homepage_music.mp3")
+                                        currentScreen = Screen.USERNAME
                                     }
                                 }
                             )
@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
                                         currentProgress = synced.copy(username = username)
                                         activeLevel = synced.highestUnlocked
                                         progressRepository.saveProgress(currentProgress)
-                                        currentScreen = Screen.HOME
+                                        currentScreen = Screen.START
                                         soundManager.playMusic("homepage_music.mp3")
                                     }
                                 }
@@ -129,23 +129,25 @@ class MainActivity : ComponentActivity() {
                         }
 
                         Screen.GAME -> {
-                            GameScreen(
-                                level = activeLevel,
-                                progress = currentProgress,
-                                soundManager = soundManager,
-                                vibrationManager = vibrationManager,
-                                onSaveProgress = { updated ->
-                                    currentProgress = updated
-                                    progressRepository.saveProgress(updated, syncToCloud = true)
-                                },
-                                onNextLevel = { nextLvl ->
-                                    activeLevel = nextLvl
-                                },
-                                onHome = {
-                                    currentScreen = Screen.HOME
-                                    soundManager.playMusic("homepage_music.mp3")
-                                }
-                            )
+                            key(activeLevel) {
+                                GameScreen(
+                                    level = activeLevel,
+                                    progress = currentProgress,
+                                    soundManager = soundManager,
+                                    vibrationManager = vibrationManager,
+                                    onSaveProgress = { updated ->
+                                        currentProgress = updated
+                                        progressRepository.saveProgress(updated, syncToCloud = true)
+                                    },
+                                    onNextLevel = { nextLvl ->
+                                        activeLevel = nextLvl
+                                    },
+                                    onHome = {
+                                        currentScreen = Screen.HOME
+                                        soundManager.playMusic("homepage_music.mp3")
+                                    }
+                                )
+                            }
                         }
 
                         Screen.SETTINGS -> {
