@@ -56,6 +56,7 @@ fun LoadingScreen(
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Fullscreen Loading Background
         if (loadingBg != null) {
             Image(
                 bitmap = loadingBg,
@@ -67,6 +68,7 @@ fun LoadingScreen(
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0422)))
         }
 
+        // Dark gradient vignette
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -77,6 +79,7 @@ fun LoadingScreen(
                 )
         )
 
+        // Loading bar & status at bottom
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -93,6 +96,7 @@ fun LoadingScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            // Shimmer Loading Bar
             Box(
                 modifier = Modifier
                     .width(200.dp)

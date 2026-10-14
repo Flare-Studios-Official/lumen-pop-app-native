@@ -9,99 +9,145 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.togglestudios.lumenpop.R
 import com.togglestudios.lumenpop.data.BoosterKind
 
 @Composable
 fun BoosterBar(
     coins: Int,
+    activeBooster: BoosterKind?,
+    disabled: Boolean = false,
     onBoosterClick: (BoosterKind) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        BoosterButton(
+        BoosterCard(
             kind = BoosterKind.SHUFFLE,
-            icon = "🔀",
+            title = "Shuffle",
+            iconRes = R.drawable.ic_shuffle,
+            iconBgColor = Color(0xFFFFCF4E),
             canAfford = coins >= BoosterKind.SHUFFLE.price,
-            onClick = { onBoosterClick(BoosterKind.SHUFFLE) }
+            isActive = activeBooster == BoosterKind.SHUFFLE,
+            disabled = disabled,
+            onClick = { onBoosterClick(BoosterKind.SHUFFLE) },
+            modifier = Modifier.weight(1f)
         )
-        BoosterButton(
+        BoosterCard(
             kind = BoosterKind.BOMB,
-            icon = "💣",
+            title = "Bomb",
+            iconRes = R.drawable.ic_bomb,
+            iconBgColor = Color(0xFFFF7C9F),
             canAfford = coins >= BoosterKind.BOMB.price,
-            onClick = { onBoosterClick(BoosterKind.BOMB) }
+            isActive = activeBooster == BoosterKind.BOMB,
+            disabled = disabled,
+            onClick = { onBoosterClick(BoosterKind.BOMB) },
+            modifier = Modifier.weight(1f)
         )
-        BoosterButton(
+        BoosterCard(
             kind = BoosterKind.BURST,
-            icon = "⚡",
+            title = "Burst",
+            iconRes = R.drawable.ic_burst,
+            iconBgColor = Color(0xFF7CF4E3),
             canAfford = coins >= BoosterKind.BURST.price,
-            onClick = { onBoosterClick(BoosterKind.BURST) }
+            isActive = activeBooster == BoosterKind.BURST,
+            disabled = disabled,
+            onClick = { onBoosterClick(BoosterKind.BURST) },
+            modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-private fun BoosterButton(
+private fun BoosterCard(
     kind: BoosterKind,
-    icon: String,
+    title: String,
+    iconRes: Int,
+    iconBgColor: Color,
     canAfford: Boolean,
-    onClick: () -> Unit
+    isActive: Boolean,
+    disabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = Modifier
+    val isEnabled = !disabled && canAfford
+    val borderColor = when {
+        isActive -> Color(0xFFFFD700)
+        isEnabled -> Color.White.copy(alpha = 0.2f)
+        else -> Color.White.copy(alpha = 0.08f)
+    }
+    val bgColor = when {
+        isActive -> Color(0xFFFFD700).copy(alpha = 0.18f)
+        isEnabled -> Color.White.copy(alpha = 0.1f)
+        else -> Color.White.copy(alpha = 0.05f)
+    }
+
+    Box(
+        modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (canAfford) Color(0xFF1B0B3B).copy(alpha = 0.85f)
-                else Color(0xFF1B0B3B).copy(alpha = 0.45f)
-            )
-            .border(
-                1.dp,
-                if (canAfford) Color(0xFF00F0FF).copy(alpha = 0.4f)
-                else Color.White.copy(alpha = 0.08f),
-                RoundedCornerShape(16.dp)
-            )
-            .clickable(enabled = canAfford) { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(bgColor)
+            .border(if (isActive) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
+            .clickable(enabled = isEnabled) { onClick() }
+            .padding(horizontal = 6.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(text = icon, fontSize = 20.sp)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = kind.title,
-            color = if (canAfford) Color.White else Color.White.copy(alpha = 0.4f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black.copy(alpha = 0.4f))
-                .padding(horizontal = 6.dp, vertical = 1.dp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "🪙 ${kind.price}",
-                color = if (canAfford) Color(0xFFFFD700) else Color(0xFFFFD700).copy(alpha = 0.4f),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
+            // Colored circular / squircle icon badge
+            Box(
+                modifier = Modifier
+                    .size(31.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isEnabled) iconBgColor else iconBgColor.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = iconRes),
+                    contentDescription = title,
+                    tint = Color(0xFF23104C),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Column {
+                Text(
+                    text = title,
+                    color = if (isEnabled) Color.White else Color.White.copy(alpha = 0.4f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "${kind.price} shards",
+                    color = if (isEnabled) Color.White.copy(alpha = 0.58f) else Color.White.copy(alpha = 0.3f),
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }

@@ -55,6 +55,7 @@ fun LumenTileView(
             .scale(scale),
         contentAlignment = Alignment.Center
     ) {
+        // Selection highlight ring
         if (isSelected) {
             Box(
                 modifier = Modifier
@@ -72,6 +73,7 @@ fun LumenTileView(
             )
         }
 
+        // The Lumen sprite
         if (imageBitmap != null) {
             Image(
                 bitmap = imageBitmap,
@@ -81,6 +83,7 @@ fun LumenTileView(
                     .clip(RoundedCornerShape(8.dp))
             )
         } else {
+            // Fallback colored circle if asset not yet cached
             Box(
                 modifier = Modifier
                     .fillMaxSize(0.8f)
@@ -89,6 +92,7 @@ fun LumenTileView(
             )
         }
 
+        // Special Badge
         if (tile.special != SpecialType.NONE) {
             val badgeText = when (tile.special) {
                 SpecialType.BEAM_H -> "↔"

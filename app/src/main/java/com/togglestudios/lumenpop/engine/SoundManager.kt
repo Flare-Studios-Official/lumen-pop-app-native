@@ -91,6 +91,7 @@ class SoundManager(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
+                // Ignore audio generation issues
             }
         }
     }
@@ -103,6 +104,7 @@ class SoundManager(private val context: Context) {
         for (i in 0 until numSamples) {
             val time = i.toDouble() / sampleRate
             val angle = 2.0 * Math.PI * frequencyHz * time
+            // Simple envelope
             val envelope = when {
                 i < numSamples * 0.1 -> (i / (numSamples * 0.1)).toFloat()
                 i > numSamples * 0.7 -> ((numSamples - i) / (numSamples * 0.3)).toFloat()

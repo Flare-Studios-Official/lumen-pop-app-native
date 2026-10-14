@@ -1,6 +1,7 @@
 package com.togglestudios.lumenpop.ui.components
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember

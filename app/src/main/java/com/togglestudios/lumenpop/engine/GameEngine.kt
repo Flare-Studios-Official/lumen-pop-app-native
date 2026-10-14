@@ -33,6 +33,28 @@ class GameEngine {
             val dCol = kotlin.math.abs(colOf(a) - colOf(b))
             return dRow <= 1 && dCol <= 1 && !(dRow == 0 && dCol == 0)
         }
+
+        /**
+         * Web-identical scoring formula:
+         * Length 3: 30 pts
+         * Length 4: 55 pts
+         * Length 5: 85 pts
+         * Length 6: 120 pts
+         * Length 7+: 120 + (length - 6) * 35 pts
+         * Each additional cascaded/exploded tile: +10 pts
+         */
+        fun calculateScore(chainLength: Int, totalExploded: Int = chainLength): Int {
+            if (chainLength < 3) return 0
+            val base = when (chainLength) {
+                3 -> 30
+                4 -> 55
+                5 -> 85
+                6 -> 120
+                else -> 120 + (chainLength - 6) * 35
+            }
+            val extra = (totalExploded - chainLength).coerceAtLeast(0) * 10
+            return base + extra
+        }
     }
 
     private var nextTileId = 1000L
@@ -188,7 +210,7 @@ class GameEngine {
     fun collapseAndRefill(
         currentBoard: List<Tile>,
         explodedIndices: Set<Int>,
-        level: Int = 1
+        @Suppress("UNUSED_PARAMETER") level: Int = 1
     ): Pair<MutableList<Tile>, List<Int>> {
         val working: MutableList<Tile?> = currentBoard.toMutableList()
         explodedIndices.forEach { idx ->

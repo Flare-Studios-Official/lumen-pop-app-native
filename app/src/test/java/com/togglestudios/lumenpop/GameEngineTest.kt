@@ -99,4 +99,27 @@ class GameEngineTest {
         assertEquals(30, lvl30.level)
         assertEquals("Twilight Grove", lvl30.world)
     }
+
+    @Test
+    fun testScoringRules() {
+        // Chains < 3 give 0 points
+        assertEquals(0, GameEngine.calculateScore(0))
+        assertEquals(0, GameEngine.calculateScore(1))
+        assertEquals(0, GameEngine.calculateScore(2))
+
+        // Web native exact scoring
+        assertEquals(30, GameEngine.calculateScore(3))
+        assertEquals(55, GameEngine.calculateScore(4))
+        assertEquals(85, GameEngine.calculateScore(5))
+        assertEquals(120, GameEngine.calculateScore(6))
+        assertEquals(155, GameEngine.calculateScore(7)) // 120 + 1 * 35
+        assertEquals(190, GameEngine.calculateScore(8)) // 120 + 2 * 35
+        assertEquals(225, GameEngine.calculateScore(9)) // 120 + 3 * 35
+
+        // Cascaded / extra cleared tiles (+10 pts each)
+        // 4-link chain that clears 7 extra tiles via Beam: 55 + 7 * 10 = 125
+        assertEquals(125, GameEngine.calculateScore(4, 11))
+        // 5-link chain that clears 8 extra tiles via Nova: 85 + 8 * 10 = 165
+        assertEquals(165, GameEngine.calculateScore(5, 13))
+    }
 }

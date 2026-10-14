@@ -3,6 +3,8 @@ package com.togglestudios.lumenpop.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,13 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,24 +40,631 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.togglestudios.lumenpop.R
+import com.togglestudios.lumenpop.data.SavedProgress
 import com.togglestudios.lumenpop.data.SupabaseManager
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 
-enum class AuthStage {
-    CLAIM_USERNAME,
-    CHOOSE_METHOD,
-    WELCOME_BACK
+@Composable
+fun AuthOverlayModal(
+    progress: SavedProgress,
+    supabaseManager: SupabaseManager,
+    onClose: () -> Unit,
+    onAuthSuccess: (String) -> Unit,
+    onSignOut: () -> Unit
+) {
+    val session = supabaseManager.currentSession
+    val isSignedIn = session != null
+
+    var mode by remember { mutableStateOf<String>("menu") } // "menu", "sign-in", "sign-up"
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    val totalStars = remember(progress.completed) {
+        progress.completed.values.sumOf { it.stars }
+    }
+    val formattedShards = remember(progress.coins) {
+        NumberFormat.getNumberInstance(Locale.US).format(progress.coins)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D032A).copy(alpha = 0.75f))
+            .clickable { onClose() },
+        contentAlignment = Alignment.Center
+    ) {
+        // Modal Card matching Image 3 (.modal relative w-full max-w-sm bg-[#130638])
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clickable(enabled = false) {} // Prevent click from dismissing
+                .clip(RoundedCornerShape(32.dp))
+                .background(Color(0xFF130638))
+                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(32.dp))
+                .shadow(32.dp, shape = RoundedCornerShape(32.dp))
+                .padding(26.dp)
+        ) {
+            // Close 'X' button on top-right
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .align(Alignment.TopEnd)
+                    .clip(CircleShape)
+                    .clickable { onClose() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✕",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isSignedIn) {
+                    // --- SIGNED-IN PROFILE VIEW ---
+                    val userInitial = (session?.username?.take(1) ?: progress.username.take(1)).uppercase()
+
+                    // Avatar Circle with Cyan Ring Glow
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .shadow(16.dp, CircleShape, spotColor = Color(0xFF00F0FF))
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF00F0FF), Color(0xFF9333EA))
+                                )
+                            )
+                            .padding(2.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(Color(0xFF130638)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = userInitial,
+                                color = Color.White,
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = session?.username ?: progress.username,
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = session?.email ?: "Linked Account",
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Player Stats: 3 Cards (Progress, Stars, Shards)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Progress
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_crown),
+                                    contentDescription = null,
+                                    tint = Color(0xFFFFD700),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Lvl ${progress.highestUnlocked}",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "PROGRESS",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        // Stars
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_sparkles),
+                                    contentDescription = null,
+                                    tint = Color(0xFF00F0FF),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "$totalStars",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "STARS",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        // Shards
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_gem),
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF8CCC),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = formattedShards,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "SHARDS",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Sign Out Button
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFFF4500).copy(alpha = 0.12f))
+                            .border(1.dp, Color(0xFFFF4500).copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                            .clickable {
+                                supabaseManager.signOut()
+                                onSignOut()
+                                onClose()
+                            }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Sign Out",
+                            color = Color(0xFFFF8C8C),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    // --- SIGN-IN / SIGN-UP VIEW (Image 3) ---
+                    // Circular Cyan User Icon
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF00F0FF).copy(alpha = 0.12f))
+                            .border(1.dp, Color(0xFF00F0FF).copy(alpha = 0.35f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_help),
+                            contentDescription = null,
+                            tint = Color(0xFF00F0FF),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Sign In to Lumen Pop",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Signing in is optional. Link an account to backup your progress across devices and keep your username secure.",
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 17.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Error notice if any
+                    if (errorMessage != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFFFF3366).copy(alpha = 0.2f))
+                                .border(1.dp, Color(0xFFFF3366).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = errorMessage ?: "",
+                                color = Color(0xFFFF99AA),
+                                fontSize = 11.5.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    if (mode == "menu") {
+                        // Button 1: "Continue with Google"
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .shadow(8.dp, RoundedCornerShape(15.dp))
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(Color.White)
+                                .clickable(enabled = !isLoading) {
+                                    scope.launch {
+                                        isLoading = true
+                                        errorMessage = null
+                                        val res = supabaseManager.signInAnonymousOrGuest(progress.username)
+                                        isLoading = false
+                                        if (res.isSuccess) {
+                                            onAuthSuccess(progress.username)
+                                            onClose()
+                                        } else {
+                                            errorMessage = res.exceptionOrNull()?.message ?: "Sign-in failed"
+                                        }
+                                    }
+                                }
+                                .padding(vertical = 13.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_google),
+                                    contentDescription = "Google",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Continue with Google",
+                                    color = Color(0xFF1F2937),
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Button 2: "Continue with Apple"
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(Color(0xFF000000))
+                                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(15.dp))
+                                .clickable(enabled = !isLoading) {
+                                    scope.launch {
+                                        isLoading = true
+                                        errorMessage = null
+                                        val res = supabaseManager.signInAnonymousOrGuest(progress.username)
+                                        isLoading = false
+                                        if (res.isSuccess) {
+                                            onAuthSuccess(progress.username)
+                                            onClose()
+                                        } else {
+                                            errorMessage = res.exceptionOrNull()?.message ?: "Apple Sign-in failed"
+                                        }
+                                    }
+                                }
+                                .padding(vertical = 13.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_apple),
+                                    contentDescription = "Apple",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Continue with Apple",
+                                    color = Color.White,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Divider: ─── OR ───
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp)
+                        ) {
+                            HorizontalDivider(
+                                color = Color.White.copy(alpha = 0.2f),
+                                thickness = 1.dp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "  OR  ",
+                                color = Color.White.copy(alpha = 0.45f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp
+                            )
+                            HorizontalDivider(
+                                color = Color.White.copy(alpha = 0.2f),
+                                thickness = 1.dp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Button 3: "Continue with Email"
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(Color.White.copy(alpha = 0.12f))
+                                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(15.dp))
+                                .clickable { mode = "sign-in" }
+                                .padding(vertical = 13.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_mail),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Continue with Email",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else {
+                        // Email Form (Sign In / Sign Up)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (mode == "sign-up") {
+                                OutlinedTextField(
+                                    value = username,
+                                    onValueChange = { username = it },
+                                    placeholder = { Text("Stargazer username", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFF00F0FF),
+                                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White
+                                    ),
+                                    singleLine = true
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                placeholder = { Text("Email address", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF00F0FF),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                placeholder = { Text("Password (min 8 chars)", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                visualTransformation = PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF00F0FF),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                ),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Submit Button
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFFFFE879), Color(0xFFFFBC43))
+                                        )
+                                    )
+                                    .clickable(enabled = !isLoading) {
+                                        focusManager.clearFocus()
+                                        scope.launch {
+                                            isLoading = true
+                                            errorMessage = null
+                                            if (mode == "sign-up") {
+                                                val res = supabaseManager.signUp(email, password, username)
+                                                isLoading = false
+                                                if (res.isSuccess) {
+                                                    onAuthSuccess(username)
+                                                    onClose()
+                                                } else {
+                                                    errorMessage = res.exceptionOrNull()?.message ?: "Registration failed"
+                                                }
+                                            } else {
+                                                val res = supabaseManager.signIn(email, password)
+                                                isLoading = false
+                                                if (res.isSuccess) {
+                                                    val u = res.getOrNull()?.username ?: email
+                                                    onAuthSuccess(u)
+                                                    onClose()
+                                                } else {
+                                                    errorMessage = res.exceptionOrNull()?.message ?: "Sign-in failed"
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 13.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(color = Color(0xFF291063), modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text(
+                                        text = if (mode == "sign-up") "Create Account" else "Sign In",
+                                        color = Color(0xFF291063),
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = if (mode == "sign-up") "Already have an account? Sign In" else "Need an account? Sign Up",
+                                color = Color(0xFF00F0FF),
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        mode = if (mode == "sign-up") "sign-in" else "sign-up"
+                                        errorMessage = null
+                                    }
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = "← Back to options",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        mode = "menu"
+                                        errorMessage = null
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -64,565 +672,11 @@ fun AuthScreen(
     supabaseManager: SupabaseManager,
     onAuthSuccess: (String) -> Unit
 ) {
-    var stage by remember { mutableStateOf(AuthStage.CLAIM_USERNAME) }
-
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-
-    var loginIdentifier by remember { mutableStateOf("") }
-    var loginPassword by remember { mutableStateOf("") }
-    var showLoginPassword by remember { mutableStateOf(false) }
-
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var infoDialogText by remember { mutableStateOf<String?>(null) }
-
-    val scope = rememberCoroutineScope()
-    val focusManager = LocalFocusManager.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF0D0422), Color(0xFF1B0B3B), Color(0xFF281155))
-                )
-            )
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .clip(RoundedCornerShape(32.dp))
-                .background(Color(0xFF12053C).copy(alpha = 0.92f))
-                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(32.dp))
-                .padding(26.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Glow Icon Header
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF00F0FF).copy(alpha = 0.12f))
-                    .border(1.dp, Color(0xFF00F0FF).copy(alpha = 0.35f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (stage == AuthStage.WELCOME_BACK) "✨" else "🪐",
-                    fontSize = 28.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "LUMEN POP",
-                color = Color(0xFF00F0FF),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = when (stage) {
-                    AuthStage.CLAIM_USERNAME -> "Claim Your Username"
-                    AuthStage.CHOOSE_METHOD -> "Choose Sign-In Method"
-                    AuthStage.WELCOME_BACK -> "Welcome Back"
-                },
-                color = Color.White,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = when (stage) {
-                    AuthStage.CLAIM_USERNAME -> "Pick a unique stargazer username and a secure password."
-                    AuthStage.CHOOSE_METHOD -> "Connect an identity to save your cosmic progress across devices."
-                    AuthStage.WELCOME_BACK -> "Sign in to recover your levels, shards, and stars."
-                },
-                color = Color.White.copy(alpha = 0.65f),
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // Error Message
-            AnimatedVisibility(visible = errorMessage != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFFF1493).copy(alpha = 0.15f))
-                        .border(1.dp, Color(0xFFFF1493).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = errorMessage ?: "",
-                        color = Color(0xFFFF69B4),
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            when (stage) {
-                AuthStage.CLAIM_USERNAME -> {
-                    // Username Field
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = {
-                            username = it.lowercase().trim()
-                            errorMessage = null
-                        },
-                        label = { Text("Username (e.g. nova_7)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF00F0FF),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = Color(0xFF00F0FF),
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f)
-                        ),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Password Field
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = {
-                            password = it
-                            errorMessage = null
-                        },
-                        label = { Text("Password (min 8 chars)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            Text(
-                                text = if (showPassword) "👁" else "🔒",
-                                modifier = Modifier
-                                    .clickable { showPassword = !showPassword }
-                                    .padding(8.dp),
-                                fontSize = 16.sp
-                            )
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF00F0FF),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = Color(0xFF00F0FF),
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f)
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Next Button
-                    Button(
-                        onClick = {
-                            focusManager.clearFocus()
-                            val clean = username.trim().lowercase()
-                            if (clean.length < 3 || clean.length > 12) {
-                                errorMessage = "Username must be between 3 and 12 characters"
-                                return@Button
-                            }
-                            if (!clean.matches(Regex("^[a-z0-9_-]+$"))) {
-                                errorMessage = "Only lowercase letters, numbers, _, and - allowed"
-                                return@Button
-                            }
-                            if (password.length < 8) {
-                                errorMessage = "Password must be at least 8 characters long"
-                                return@Button
-                            }
-
-                            isLoading = true
-                            errorMessage = null
-                            scope.launch {
-                                val availRes = supabaseManager.checkUsernameAvailable(clean)
-                                isLoading = false
-                                if (availRes.isSuccess && availRes.getOrNull() == true) {
-                                    stage = AuthStage.CHOOSE_METHOD
-                                } else {
-                                    errorMessage = "Username is already claimed. Try another!"
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00F0FF)),
-                        enabled = !isLoading
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = Color(0xFF0D0422),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                text = "Next →",
-                                color = Color(0xFF0D0422),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Sign In Link
-                    TextButton(
-                        onClick = {
-                            errorMessage = null
-                            stage = AuthStage.WELCOME_BACK
-                        }
-                    ) {
-                        Text(
-                            text = "Sign in to existing account",
-                            color = Color(0xFF00F0FF),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                AuthStage.CHOOSE_METHOD -> {
-                    // Option 1: Continue with Google
-                    Button(
-                        onClick = {
-                            infoDialogText = "Google Sign-In is configured on the backend. For quick play, tap 'Link Afterwards' below to begin immediately."
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        enabled = !isLoading
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "🌐", fontSize = 18.sp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Continue with Google",
-                                color = Color(0xFF1F1F1F),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Option 2: Continue with Apple
-                    Button(
-                        onClick = {
-                            infoDialogText = "Apple Sign-In is supported for cross-platform iOS accounts. Use 'Link Afterwards' to proceed with your unique credentials."
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.6f)),
-                        border = ButtonDefaults.outlinedButtonBorder,
-                        enabled = !isLoading
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "", fontSize = 20.sp, color = Color.White)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Continue with Apple",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Option 3: Continue with Email
-                    Button(
-                        onClick = {
-                            infoDialogText = "Your username '$username' is already mapped to your persistent account. Tap 'Link Afterwards' to enter the cosmos."
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                        enabled = !isLoading
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "✉", fontSize = 18.sp, color = Color.White)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Continue with Email",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Link Afterwards
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(26.dp),
-                            color = Color(0xFF00F0FF),
-                            strokeWidth = 2.5.dp
-                        )
-                    } else {
-                        Text(
-                            text = "Link Afterwards",
-                            color = Color(0xFFFFD700),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clickable {
-                                    isLoading = true
-                                    errorMessage = null
-                                    scope.launch {
-                                        val regRes = supabaseManager.signUpWithUsername(username, password)
-                                        isLoading = false
-                                        if (regRes.isSuccess) {
-                                            onAuthSuccess(username)
-                                        } else {
-                                            errorMessage = regRes.exceptionOrNull()?.message ?: "Account creation failed"
-                                        }
-                                    }
-                                }
-                                .padding(8.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    TextButton(
-                        onClick = {
-                            errorMessage = null
-                            stage = AuthStage.CLAIM_USERNAME
-                        }
-                    ) {
-                        Text(text = "← Back to Username", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
-                    }
-                }
-
-                AuthStage.WELCOME_BACK -> {
-                    // Login identifier field
-                    OutlinedTextField(
-                        value = loginIdentifier,
-                        onValueChange = {
-                            loginIdentifier = it
-                            errorMessage = null
-                        },
-                        label = { Text("Username or Email") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF00F0FF),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = Color(0xFF00F0FF),
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f)
-                        ),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Login password field
-                    OutlinedTextField(
-                        value = loginPassword,
-                        onValueChange = {
-                            loginPassword = it
-                            errorMessage = null
-                        },
-                        label = { Text("Password") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        visualTransformation = if (showLoginPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            Text(
-                                text = if (showLoginPassword) "👁" else "🔒",
-                                modifier = Modifier
-                                    .clickable { showLoginPassword = !showLoginPassword }
-                                    .padding(8.dp),
-                                fontSize = 16.sp
-                            )
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF00F0FF),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = Color(0xFF00F0FF),
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f)
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Sign In Button
-                    Button(
-                        onClick = {
-                            focusManager.clearFocus()
-                            val clean = loginIdentifier.trim()
-                            if (clean.isEmpty() || loginPassword.isEmpty()) {
-                                errorMessage = "Please enter both your username and password"
-                                return@Button
-                            }
-
-                            isLoading = true
-                            errorMessage = null
-                            scope.launch {
-                                val loginRes = supabaseManager.signInWithUsername(clean, loginPassword)
-                                isLoading = false
-                                if (loginRes.isSuccess) {
-                                    val session = loginRes.getOrNull()
-                                    onAuthSuccess(session?.username ?: clean)
-                                } else {
-                                    errorMessage = "Invalid username or password. Please verify your credentials."
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00F0FF)),
-                        enabled = !isLoading
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = Color(0xFF0D0422),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(
-                                text = "Sign In",
-                                color = Color(0xFF0D0422),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Forgot Password?
-                    TextButton(
-                        onClick = {
-                            infoDialogText = "To reset your password, contact Flare Studios support or log in via your linked recovery email."
-                        }
-                    ) {
-                        Text(
-                            text = "Forgot Password?",
-                            color = Color.White.copy(alpha = 0.65f),
-                            fontSize = 12.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Switch to Claim Username
-                    TextButton(
-                        onClick = {
-                            errorMessage = null
-                            stage = AuthStage.CLAIM_USERNAME
-                        }
-                    ) {
-                        Text(
-                            text = "Need an account? Claim your username",
-                            color = Color(0xFF00F0FF),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-        }
-
-        // Info popup
-        if (infoDialogText != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable { infoDialogText = null },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xFF1B0B3B))
-                        .border(1.dp, Color(0xFF00F0FF).copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-                        .padding(24.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "✨", fontSize = 32.sp)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Account Information",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = infoDialogText ?: "",
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 13.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Button(
-                            onClick = { infoDialogText = null },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00F0FF)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(text = "Got it", color = Color(0xFF0D0422), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    AuthOverlayModal(
+        progress = SavedProgress(),
+        supabaseManager = supabaseManager,
+        onClose = { onAuthSuccess("Stargazer") },
+        onAuthSuccess = onAuthSuccess,
+        onSignOut = {}
+    )
 }

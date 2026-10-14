@@ -489,6 +489,35 @@ class SupabaseManager(context: Context) {
         }
     }
 
+    suspend fun signUp(email: String, password: String, username: String): Result<AuthSession> {
+        val cleanUser = username.ifBlank { email.substringBefore("@") }
+        return signUpWithUsername(cleanUser, password)
+    }
+
+    suspend fun signIn(emailOrUsername: String, password: String): Result<AuthSession> {
+        return signInWithUsername(emailOrUsername, password)
+    }
+
+    suspend fun signInAnonymousOrGuest(preferredUsername: String): Result<AuthSession> = withContext(Dispatchers.IO) {
+        val cleanName = preferredUsername.ifBlank { "Stargazer_${(1000..9999).random()}" }
+        val generatedPass = "GuestPass_" + System.currentTimeMillis() + "_" + (1000..9999).random()
+        val res = signUpWithUsername(cleanName, generatedPass)
+        if (res.isSuccess) {
+            res
+        } else {
+            // If already exists, attempt login or local session
+            val localSession = AuthSession(
+                userId = "guest_" + System.currentTimeMillis(),
+                accessToken = ANON_KEY,
+                refreshToken = "",
+                username = cleanName,
+                email = "$cleanName@lumenpop.app"
+            )
+            persistSession(localSession)
+            Result.success(localSession)
+        }
+    }
+
     private fun parseErrorMessage(jsonStr: String, defaultMsg: String): String {
         return try {
             val obj = JSONObject(jsonStr)

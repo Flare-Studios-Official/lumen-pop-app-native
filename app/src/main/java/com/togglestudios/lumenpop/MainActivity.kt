@@ -19,6 +19,7 @@ import com.togglestudios.lumenpop.data.Screen
 import com.togglestudios.lumenpop.engine.SoundManager
 import com.togglestudios.lumenpop.engine.VibrationManager
 import com.togglestudios.lumenpop.ui.components.TutorialCarousel
+import com.togglestudios.lumenpop.ui.screens.AuthOverlayModal
 import com.togglestudios.lumenpop.ui.screens.AuthScreen
 import com.togglestudios.lumenpop.ui.screens.GameScreen
 import com.togglestudios.lumenpop.ui.screens.HomeScreen
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
             var currentProgress by remember { mutableStateOf(progressRepository.loadProgress()) }
             var activeLevel by remember { mutableIntStateOf(currentProgress.highestUnlocked) }
             var showTutorial by remember { mutableStateOf(false) }
+            var showAuthOverlay by remember { mutableStateOf(false) }
 
             val scope = rememberCoroutineScope()
 
@@ -67,10 +69,11 @@ class MainActivity : ComponentActivity() {
                                             currentProgress = synced
                                             activeLevel = synced.highestUnlocked
                                         }
-                                        currentScreen = Screen.HOME
+                                        currentScreen = Screen.START
                                         soundManager.playMusic("homepage_music.mp3")
                                     } else {
-                                        currentScreen = Screen.USERNAME
+                                        currentScreen = Screen.START
+                                        soundManager.playMusic("homepage_music.mp3")
                                     }
                                 }
                             )
@@ -95,11 +98,8 @@ class MainActivity : ComponentActivity() {
                         Screen.START -> {
                             StartScreen(
                                 progress = currentProgress,
-                                onPlayClick = {
+                                onStart = {
                                     currentScreen = Screen.HOME
-                                },
-                                onSettingsClick = {
-                                    currentScreen = Screen.SETTINGS
                                 }
                             )
                         }
@@ -118,12 +118,12 @@ class MainActivity : ComponentActivity() {
                                 onSettings = {
                                     currentScreen = Screen.SETTINGS
                                 },
+                                onProfileClick = {
+                                    showAuthOverlay = true
+                                },
                                 onSaveProgress = { updated ->
                                     currentProgress = updated
                                     progressRepository.saveProgress(updated, syncToCloud = true)
-                                },
-                                onBack = {
-                                    currentScreen = Screen.START
                                 }
                             )
                         }
@@ -158,16 +158,6 @@ class MainActivity : ComponentActivity() {
                                     soundManager.isSoundEnabled = updated.sound
                                     vibrationManager.isHapticsEnabled = updated.haptics
                                 },
-                                onResetProgress = {
-                                    val reset = progressRepository.resetProgress()
-                                    currentProgress = reset
-                                    activeLevel = 1
-                                },
-                                onSignOut = {
-                                    progressRepository.supabaseManager.signOut()
-                                    currentScreen = Screen.USERNAME
-                                    soundManager.stopMusic()
-                                },
                                 onBack = {
                                     currentScreen = Screen.HOME
                                 }
@@ -177,6 +167,27 @@ class MainActivity : ComponentActivity() {
                         else -> {
                             currentScreen = Screen.START
                         }
+                    }
+
+                    // Optional Auth Overlay Modal from Home profile click
+                    if (showAuthOverlay) {
+                        AuthOverlayModal(
+                            progress = currentProgress,
+                            supabaseManager = progressRepository.supabaseManager,
+                            onClose = { showAuthOverlay = false },
+                            onAuthSuccess = { newUsername ->
+                                scope.launch {
+                                    val synced = progressRepository.syncWithCloud()
+                                    currentProgress = synced.copy(username = newUsername)
+                                    progressRepository.saveProgress(currentProgress)
+                                }
+                                showAuthOverlay = false
+                            },
+                            onSignOut = {
+                                currentProgress = currentProgress.copy(username = "Stargazer")
+                                progressRepository.saveProgress(currentProgress)
+                            }
+                        )
                     }
 
                     if (showTutorial) {
