@@ -59,7 +59,8 @@ class SupabaseManager(context: Context) {
         val token = prefs.getString(KEY_ACCESS_TOKEN, null)
         val refresh = prefs.getString(KEY_REFRESH_TOKEN, null)
         val username = prefs.getString(KEY_USERNAME, null)
-        val email = prefs.getString(KEY_EMAIL, null)
+        val email = prefs.getString(KEY_EMAIL, null) ?: ""
+        val cleanEmail = if (email.contains("@lumenpop.app") || email.contains("@auth.lumenpop.internal")) "" else email
 
         if (!uid.isNullOrEmpty() && !token.isNullOrEmpty() && !username.isNullOrEmpty()) {
             currentSession = AuthSession(
@@ -67,7 +68,7 @@ class SupabaseManager(context: Context) {
                 accessToken = token,
                 refreshToken = refresh ?: "",
                 username = username,
-                email = email ?: "$username@lumenpop.app"
+                email = cleanEmail
             )
         }
     }
@@ -131,10 +132,43 @@ class SupabaseManager(context: Context) {
         }
     }
 
-    suspend fun signUpWithUsername(username: String, password: String): Result<AuthSession> = withContext(Dispatchers.IO) {
+    suspend fun resolveUsernameToEmail(username: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$BASE_URL/rest/v1/rpc/resolve_username_email")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.setRequestProperty("apikey", ANON_KEY)
+            conn.setRequestProperty("Authorization", "Bearer $ANON_KEY")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+
+            val payload = JSONObject().put("p_username", username.trim().lowercase()).toString()
+            OutputStreamWriter(conn.outputStream).use { it.write(payload) }
+
+            if (conn.responseCode in 200..299) {
+                val resp = BufferedReader(InputStreamReader(conn.inputStream)).use { it.readText().trim() }
+                val cleaned = resp.replace("\"", "").trim()
+                if (cleaned.isNotEmpty() && cleaned != "null") cleaned else null
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveUsernameToEmail failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun signUpWithUsername(
+        username: String,
+        password: String,
+        realEmail: String? = null
+    ): Result<AuthSession> = withContext(Dispatchers.IO) {
         try {
             val clean = username.trim().lowercase()
-            val syntheticEmail = "$clean@lumenpop.app"
+            val hasRealEmail = !realEmail.isNullOrBlank() && realEmail.contains("@")
+            val emailToUse = if (hasRealEmail) realEmail!!.trim() else "$clean@auth.lumenpop.internal"
 
             val url = URL("$BASE_URL/auth/v1/signup")
             val conn = url.openConnection() as HttpURLConnection
@@ -146,7 +180,7 @@ class SupabaseManager(context: Context) {
             conn.doOutput = true
 
             val body = JSONObject().apply {
-                put("email", syntheticEmail)
+                put("email", emailToUse)
                 put("password", password)
                 put("data", JSONObject().put("username", clean))
             }
@@ -172,12 +206,13 @@ class SupabaseManager(context: Context) {
                     }
                 }
 
+                val displayEmail = if (hasRealEmail) realEmail!!.trim() else ""
                 val session = AuthSession(
                     userId = uid,
                     accessToken = token,
                     refreshToken = refresh,
                     username = clean,
-                    email = syntheticEmail
+                    email = displayEmail
                 )
                 persistSession(session)
                 Result.success(session)
@@ -194,8 +229,14 @@ class SupabaseManager(context: Context) {
 
     suspend fun signInWithUsername(identifier: String, password: String): Result<AuthSession> = withContext(Dispatchers.IO) {
         try {
-            val clean = identifier.trim().lowercase()
-            val emailToUse = if (clean.contains("@")) clean else "$clean@lumenpop.app"
+            val clean = identifier.trim()
+            val hasEmail = clean.contains("@")
+            val emailToUse = if (hasEmail) {
+                clean
+            } else {
+                val resolved = resolveUsernameToEmail(clean)
+                resolved ?: "${clean.lowercase()}@auth.lumenpop.internal"
+            }
 
             val url = URL("$BASE_URL/auth/v1/token?grant_type=password")
             val conn = url.openConnection() as HttpURLConnection
@@ -225,14 +266,21 @@ class SupabaseManager(context: Context) {
                 val uid = userObj.getString("id")
                 val meta = userObj.optJSONObject("user_metadata")
                 val username = meta?.optString("username")?.ifEmpty { null }
-                    ?: clean.replace("@lumenpop.app", "")
+                    ?: clean.substringBefore("@")
+
+                val returnedEmail = userObj.optString("email", emailToUse)
+                val displayEmail = if (returnedEmail.contains("@auth.lumenpop.internal") || returnedEmail.contains("@lumenpop.app")) {
+                    ""
+                } else {
+                    returnedEmail
+                }
 
                 val session = AuthSession(
                     userId = uid,
                     accessToken = token,
                     refreshToken = refresh,
                     username = username,
-                    email = emailToUse
+                    email = displayEmail
                 )
                 persistSession(session)
                 Result.success(session)
@@ -491,7 +539,8 @@ class SupabaseManager(context: Context) {
 
     suspend fun signUp(email: String, password: String, username: String): Result<AuthSession> {
         val cleanUser = username.ifBlank { email.substringBefore("@") }
-        return signUpWithUsername(cleanUser, password)
+        val realEmail = if (email.isNotBlank() && email.contains("@")) email.trim() else null
+        return signUpWithUsername(cleanUser, password, realEmail)
     }
 
     suspend fun signIn(emailOrUsername: String, password: String): Result<AuthSession> {
@@ -500,22 +549,15 @@ class SupabaseManager(context: Context) {
 
     suspend fun signInAnonymousOrGuest(preferredUsername: String): Result<AuthSession> = withContext(Dispatchers.IO) {
         val cleanName = preferredUsername.ifBlank { "Stargazer_${(1000..9999).random()}" }
-        val generatedPass = "GuestPass_" + System.currentTimeMillis() + "_" + (1000..9999).random()
-        val res = signUpWithUsername(cleanName, generatedPass)
-        if (res.isSuccess) {
-            res
-        } else {
-            // If already exists, attempt login or local session
-            val localSession = AuthSession(
-                userId = "guest_" + System.currentTimeMillis(),
-                accessToken = ANON_KEY,
-                refreshToken = "",
-                username = cleanName,
-                email = "$cleanName@lumenpop.app"
-            )
-            persistSession(localSession)
-            Result.success(localSession)
-        }
+        val localSession = AuthSession(
+            userId = "guest_" + System.currentTimeMillis(),
+            accessToken = ANON_KEY,
+            refreshToken = "",
+            username = cleanName,
+            email = ""
+        )
+        persistSession(localSession)
+        Result.success(localSession)
     }
 
     private fun parseErrorMessage(jsonStr: String, defaultMsg: String): String {
