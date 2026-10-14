@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <!-- Center circle -->
+    <path
+        android:strokeColor="#FF23104C"
+        android:strokeWidth="2.4"
+        android:pathData="M16,10.5 A5.5,5.5 0 1,0 16,21.5 A5.5,5.5 0 1,0 16,10.5 Z" />
+    <!-- Radial burst rays -->
+    <path
+        android:strokeColor="#FF23104C"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M16,4v6M16,22v6M4,16h6M22,16h6M7.5,7.5l4,4M20.5,20.5l4,4M24.5,7.5l-4,4M11.5,20.5l-4,4" />
+</vector>

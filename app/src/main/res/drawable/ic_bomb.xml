@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+    <!-- Bomb circle -->
+    <path
+        android:strokeColor="#FF23104C"
+        android:strokeWidth="2.4"
+        android:pathData="M15,9.5 A8.5,8.5 0 1,0 15,26.5 A8.5,8.5 0 1,0 15,9.5 Z" />
+    <!-- Fuse and sparks -->
+    <path
+        android:strokeColor="#FF23104C"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M20.5,11.5L24,8M23.5,7.5l2,2M14,6v3" />
+    <path
+        android:fillColor="#FF23104C"
+        android:pathData="M12.5,14 A1.5,1.5 0 1,0 12.5,17 A1.5,1.5 0 1,0 12.5,14 Z" />
+</vector>
